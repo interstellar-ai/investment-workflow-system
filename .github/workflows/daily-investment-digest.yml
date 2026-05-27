@@ -1,0 +1,39 @@
+name: Daily Investment Digest
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 0 * * *"
+
+jobs:
+  generate-digest:
+    runs-on: ubuntu-latest
+    env:
+      NEWS_QUERIES: ${{ vars.NEWS_QUERIES || 'artificial intelligence,semiconductor,cloud computing,cybersecurity,energy transition,biotech,federal reserve,geopolitics,supply chain' }}
+      MAX_ARTICLES_PER_QUERY: "8"
+      MAX_ARTICLES_TOTAL: "30"
+      REQUEST_TIMEOUT_SECONDS: "20"
+      DELIVERY_MODE: ${{ vars.DELIVERY_MODE || 'file' }}
+      OUTPUT_DIR: "outputs"
+      FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+      LLM_API_BASE_URL: ${{ secrets.LLM_API_BASE_URL }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      LLM_MODEL: ${{ secrets.LLM_MODEL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate digest
+        run: python -m investment_workflow
+
+      - name: Upload report artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: investment-digest
+          path: outputs/**
+          if-no-files-found: error
