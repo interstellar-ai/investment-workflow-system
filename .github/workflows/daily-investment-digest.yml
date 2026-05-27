@@ -29,6 +29,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Debug LLM env presence
+        run: |
+          test -n "$LLM_API_BASE_URL" && echo "LLM_API_BASE_URL=present" || echo "LLM_API_BASE_URL=missing"
+          test -n "$LLM_API_KEY" && echo "LLM_API_KEY=present" || echo "LLM_API_KEY=missing"
+          test -n "$LLM_MODEL" && echo "LLM_MODEL=present" || echo "LLM_MODEL=missing"
+
       - name: Generate digest
         run: python -m investment_workflow
 
