@@ -107,6 +107,64 @@ THEME_DEFINITIONS = {
     },
 }
 
+COMPANY_ALIASES = {
+    "adobe": "Adobe",
+    "alphabet": "Alphabet",
+    "amazon": "Amazon",
+    "amd": "AMD",
+    "apple": "Apple",
+    "arm": "Arm",
+    "asml": "ASML",
+    "broadcom": "Broadcom",
+    "boeing": "Boeing",
+    "caterpillar": "Caterpillar",
+    "crowdstrike": "CrowdStrike",
+    "datadog": "Datadog",
+    "eli lilly": "Eli Lilly",
+    "fortinet": "Fortinet",
+    "ge vernova": "GE Vernova",
+    "google": "Alphabet",
+    "intel": "Intel",
+    "marvell": "Marvell",
+    "meta": "Meta",
+    "microsoft": "Microsoft",
+    "moderna": "Moderna",
+    "morgan stanley": "Morgan Stanley",
+    "netflix": "Netflix",
+    "novo nordisk": "Novo Nordisk",
+    "nvidia": "NVIDIA",
+    "oracle": "Oracle",
+    "palo alto networks": "Palo Alto Networks",
+    "palantir": "Palantir",
+    "pfizer": "Pfizer",
+    "qualcomm": "Qualcomm",
+    "jpmorgan": "JPMorgan",
+    "salesforce": "Salesforce",
+    "sap": "SAP",
+    "schneider electric": "Schneider Electric",
+    "servicenow": "ServiceNow",
+    "siemens": "Siemens",
+    "snowflake": "Snowflake",
+    "taiwan semiconductor": "TSMC",
+    "tesla": "Tesla",
+    "tsmc": "TSMC",
+    "ups": "UPS",
+    "vertiv": "Vertiv",
+    "zscaler": "Zscaler",
+}
+
+THEME_COMPANY_FALLBACKS = {
+    "AI infrastructure": ["NVIDIA", "AMD", "Broadcom", "Microsoft"],
+    "Semiconductor cycle": ["TSMC", "ASML", "NVIDIA", "AMD"],
+    "Cloud software": ["Microsoft", "Amazon", "Oracle", "Salesforce"],
+    "Cybersecurity": ["CrowdStrike", "Palo Alto Networks", "Zscaler", "Fortinet"],
+    "Energy transition": ["GE Vernova", "Siemens", "Schneider Electric", "Vertiv"],
+    "Biotech and healthcare": ["Eli Lilly", "Novo Nordisk", "Moderna", "Pfizer"],
+    "Rates and liquidity": ["JPMorgan", "Goldman Sachs", "Morgan Stanley", "BlackRock"],
+    "Geopolitics and trade": ["Tesla", "Apple", "Boeing", "Caterpillar"],
+    "Supply chain resilience": ["UPS", "FedEx", "Maersk", "Schneider Electric"],
+}
+
 
 def _normalize_text(item: NewsItem) -> str:
     return " ".join(
@@ -155,6 +213,18 @@ def _infer_risk_level(sentiment: str, text: str) -> str:
     return "low"
 
 
+def _extract_companies(item: NewsItem) -> list[str]:
+    text = f"{item.title} {item.summary}"
+    lowered = text.lower()
+    companies: list[str] = []
+
+    for alias, canonical_name in COMPANY_ALIASES.items():
+        if alias in lowered and canonical_name not in companies:
+            companies.append(canonical_name)
+
+    return companies[:6]
+
+
 def enrich_items(items: list[NewsItem]) -> list[NewsItem]:
     now = datetime.now(timezone.utc)
     for item in items:
@@ -188,6 +258,7 @@ def enrich_items(items: list[NewsItem]) -> list[NewsItem]:
         item.risk_level = _infer_risk_level(sentiment, text)
         item.score = round(signed_score, 2)
         item.rationale = reasons
+        item.companies = _extract_companies(item)
     return items
 
 
@@ -203,12 +274,20 @@ def _build_theme_signals(items: list[NewsItem]) -> list[ThemeSignal]:
         direction = "positive" if total_score > 0.8 else "negative" if total_score < -0.8 else "mixed"
         industries = sorted({industry for item in grouped_items for industry in item.industries})
         assets = sorted({asset for item in grouped_items for asset in item.assets})
+        companies = sorted({company for item in grouped_items for company in item.companies})
+        if not companies:
+            companies = list(THEME_COMPANY_FALLBACKS.get(theme_name, []))
         reasons: list[str] = []
         for item in grouped_items[:3]:
             if item.rationale:
                 reasons.extend(item.rationale[:1])
         if not reasons:
             reasons.append("signal cluster has limited directional evidence")
+        top_items = sorted(
+            grouped_items,
+            key=lambda entry: abs(entry.score),
+            reverse=True,
+        )[:3]
         signals.append(
             ThemeSignal(
                 name=theme_name,
@@ -216,12 +295,10 @@ def _build_theme_signals(items: list[NewsItem]) -> list[ThemeSignal]:
                 direction=direction,
                 industries=industries,
                 assets=assets,
+                companies=companies[:6],
                 reasons=reasons[:3],
-                supporting_items=sorted(
-                    grouped_items,
-                    key=lambda entry: abs(entry.score),
-                    reverse=True,
-                )[:3],
+                headlines=[item.title for item in top_items],
+                supporting_items=top_items,
             )
         )
     return sorted(signals, key=lambda signal: abs(signal.score), reverse=True)
@@ -229,6 +306,8 @@ def _build_theme_signals(items: list[NewsItem]) -> list[ThemeSignal]:
 
 def _signal_label(signal: ThemeSignal) -> str:
     focus = signal.assets[0] if signal.assets else signal.name
+    if signal.companies:
+        return f"{signal.name} -> {focus}（公司：{', '.join(signal.companies[:3])}）"
     return f"{signal.name} -> {focus}"
 
 
@@ -282,6 +361,11 @@ def build_conclusion(signals: list[ThemeSignal], warnings: list[str]) -> Structu
         )
 
     watchlist = [signal.name for signal in mixed_signals[:3]] or [signal.name for signal in signals[:3]]
+    company_watchlist = []
+    for signal in positive_signals[:3] + mixed_signals[:2] + negative_signals[:1]:
+        for company in signal.companies[:3]:
+            if company not in company_watchlist:
+                company_watchlist.append(company)
 
     top_positive_names = ", ".join(signal.name for signal in positive_signals[:2]) or "高质量防守方向"
     top_negative_names = ", ".join(signal.name for signal in negative_signals[:2]) or "过热但缺少新催化的主题"
@@ -332,6 +416,7 @@ def build_conclusion(signals: list[ThemeSignal], warnings: list[str]) -> Structu
         best_directions=best_directions[:3],
         avoid_directions=avoid_directions[:2],
         watchlist=watchlist[:3],
+        company_watchlist=company_watchlist[:8],
         conservative_strategy=conservative_strategy,
         balanced_strategy=balanced_strategy,
         aggressive_strategy=aggressive_strategy,
@@ -350,7 +435,7 @@ def run_workflow(config: WorkflowConfig) -> WorkflowReport:
     conclusion = build_conclusion(signals, warnings)
 
     if config.llm is None:
-        final_markdown = render_structured_markdown(conclusion, len(enriched_items))
+        final_markdown = render_structured_markdown(conclusion, len(enriched_items), signals)
     else:
         summarizer = OpenAICompatibleSummarizer(config.llm, config.request_timeout_seconds)
         final_markdown = summarizer.render_markdown(conclusion, signals, len(enriched_items))

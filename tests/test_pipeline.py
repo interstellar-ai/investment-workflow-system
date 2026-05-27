@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 
 from investment_workflow.config import load_dotenv, load_config
-from investment_workflow.delivery import build_feishu_message
+from investment_workflow.delivery import build_feishu_message, format_beijing_timestamp
 from investment_workflow.feeds import deduplicate_items
 from investment_workflow.models import NewsItem
 from investment_workflow.pipeline import _build_theme_signals, build_conclusion, enrich_items
@@ -52,7 +52,7 @@ class PipelineTests(unittest.TestCase):
 
     def test_build_conclusion_returns_expected_lists(self) -> None:
         positive_item = NewsItem(
-            title="AI datacenter expansion supported by record orders",
+            title="NVIDIA AI datacenter expansion supported by record orders",
             link="https://example.com/3",
             source="Example",
             published_at=datetime.now(timezone.utc) - timedelta(hours=1),
@@ -60,7 +60,7 @@ class PipelineTests(unittest.TestCase):
             query="artificial intelligence",
         )
         negative_item = NewsItem(
-            title="New tariffs raise risk for exporters and supply chain",
+            title="Tesla and Apple face new tariffs that raise risk for exporters and supply chain",
             link="https://example.com/4",
             source="Example",
             published_at=datetime.now(timezone.utc) - timedelta(hours=1),
@@ -73,6 +73,7 @@ class PipelineTests(unittest.TestCase):
         self.assertTrue(conclusion.best_directions)
         self.assertEqual(len(conclusion.avoid_directions), 2)
         self.assertNotIn("{top_negative_names}", conclusion.aggressive_strategy)
+        self.assertIn("NVIDIA", conclusion.company_watchlist)
 
     def test_config_parses_multiple_delivery_targets(self) -> None:
         import os
@@ -99,9 +100,9 @@ class PipelineTests(unittest.TestCase):
         from investment_workflow.models import WorkflowReport
 
         conclusion = build_conclusion([], [])
-        markdown = render_structured_markdown(conclusion, 0)
+        markdown = render_structured_markdown(conclusion, 0, [])
         report = WorkflowReport(
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime(2026, 5, 27, 15, 54, tzinfo=timezone.utc),
             articles_collected=0,
             signals=[],
             conclusion=conclusion,
@@ -111,6 +112,38 @@ class PipelineTests(unittest.TestCase):
         payload = build_feishu_message(report)
         self.assertEqual(payload["msg_type"], "text")
         self.assertIn("最终投资结论", payload["content"]["text"])
+        self.assertIn("投资结论简报 2026-05-27 23:54 北京时间", payload["content"]["text"])
+
+    def test_format_beijing_timestamp(self) -> None:
+        from investment_workflow.models import WorkflowReport
+
+        report = WorkflowReport(
+            generated_at=datetime(2026, 5, 27, 15, 54, tzinfo=timezone.utc),
+            articles_collected=0,
+            signals=[],
+            conclusion=build_conclusion([], []),
+            final_markdown="",
+        )
+
+        self.assertEqual(format_beijing_timestamp(report), "2026-05-27 23:54 北京时间")
+
+    def test_renderer_includes_company_names(self) -> None:
+        item = NewsItem(
+            title="NVIDIA and Microsoft expand AI datacenter investment",
+            link="https://example.com/5",
+            source="Example",
+            published_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            summary="Broadcom also benefits from stronger AI infrastructure spending.",
+            query="artificial intelligence",
+        )
+
+        signals = _build_theme_signals(enrich_items([item]))
+        conclusion = build_conclusion(signals, [])
+        markdown = render_structured_markdown(conclusion, 1, signals)
+
+        self.assertIn("代表公司：", markdown)
+        self.assertIn("NVIDIA", markdown)
+        self.assertIn("Microsoft", markdown)
 
 
 if __name__ == "__main__":

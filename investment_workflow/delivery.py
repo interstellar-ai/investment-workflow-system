@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import timedelta, timezone
 from urllib.request import Request, urlopen
 
 from .config import FeishuConfig
 from .models import WorkflowReport
 
 
+BEIJING_TIMEZONE = timezone(timedelta(hours=8))
+
+
+def format_beijing_timestamp(report: WorkflowReport) -> str:
+    return report.generated_at.astimezone(BEIJING_TIMEZONE).strftime("%Y-%m-%d %H:%M 北京时间")
+
+
 def build_feishu_message(report: WorkflowReport) -> dict[str, object]:
-    title = f"投资结论简报 {report.generated_at.strftime('%Y-%m-%d %H:%M UTC')}"
+    title = f"投资结论简报 {format_beijing_timestamp(report)}"
     body = (
         f"{title}\n\n"
         f"{report.final_markdown}\n\n"

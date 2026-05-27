@@ -21,6 +21,7 @@ class NewsItem:
     risk_level: str = "medium"
     score: float = 0.0
     rationale: list[str] = field(default_factory=list)
+    companies: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -35,7 +36,9 @@ class ThemeSignal:
     direction: str
     industries: list[str]
     assets: list[str]
+    companies: list[str]
     reasons: list[str]
+    headlines: list[str]
     supporting_items: list[NewsItem]
 
     def to_dict(self) -> dict[str, Any]:
@@ -45,7 +48,9 @@ class ThemeSignal:
             "direction": self.direction,
             "industries": self.industries,
             "assets": self.assets,
+            "companies": self.companies,
             "reasons": self.reasons,
+            "headlines": self.headlines,
             "supporting_items": [item.to_dict() for item in self.supporting_items],
         }
 
@@ -56,6 +61,7 @@ class StructuredConclusion:
     best_directions: list[str]
     avoid_directions: list[str]
     watchlist: list[str]
+    company_watchlist: list[str]
     conservative_strategy: str
     balanced_strategy: str
     aggressive_strategy: str

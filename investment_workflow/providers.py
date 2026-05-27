@@ -22,7 +22,8 @@ class OpenAICompatibleSummarizer:
         for signal in signals[:6]:
             signal_lines.append(
                 f"- Theme: {signal.name}; direction: {signal.direction}; "
-                f"score: {signal.score:.2f}; reasons: {'; '.join(signal.reasons[:3])}"
+                f"score: {signal.score:.2f}; companies: {', '.join(signal.companies[:4]) or 'none'}; "
+                f"reasons: {'; '.join(signal.reasons[:3])}; headlines: {'; '.join(signal.headlines[:2])}"
             )
 
         prompt = (
@@ -34,6 +35,7 @@ class OpenAICompatibleSummarizer:
             f"Best directions: {', '.join(conclusion.best_directions)}\n"
             f"Avoid directions: {', '.join(conclusion.avoid_directions)}\n"
             f"Watchlist: {', '.join(conclusion.watchlist)}\n"
+            f"Company watchlist: {', '.join(conclusion.company_watchlist)}\n"
             f"Conservative strategy: {conclusion.conservative_strategy}\n"
             f"Balanced strategy: {conclusion.balanced_strategy}\n"
             f"Aggressive strategy: {conclusion.aggressive_strategy}\n"
@@ -48,8 +50,9 @@ class OpenAICompatibleSummarizer:
             "Return markdown with these sections exactly:\n"
             "## 最终投资结论\n"
             "- 今日总体判断\n"
-            "- 最值得配置的3个方向\n"
-            "- 最应该回避的2个方向\n"
+            "- 最值得配置的3个方向（每个方向写主题、得分、代表公司、核心催化）\n"
+            "- 最应该回避的2个方向（每个方向写主题、得分、涉及公司、风险点）\n"
+            "- 重点公司观察清单\n"
             "- 建议策略（保守型 / 平衡型 / 激进型）\n"
             "- 如果只做一个动作\n"
             "- 主要风险\n"
