@@ -9,6 +9,7 @@ jobs:
   generate-digest:
     runs-on: ubuntu-latest
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       NEWS_QUERIES: ${{ vars.NEWS_QUERIES || 'artificial intelligence,semiconductor,cloud computing,cybersecurity,energy transition,biotech,federal reserve,geopolitics,supply chain' }}
       MAX_ARTICLES_PER_QUERY: "8"
       MAX_ARTICLES_TOTAL: "30"
@@ -24,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
